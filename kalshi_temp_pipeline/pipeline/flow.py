@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import date
 
+import pandas as pd
+
 from kalshi_temp_pipeline.config import load_settings
 from kalshi_temp_pipeline.pipeline.tasks.decision import make_decision
-from kalshi_temp_pipeline.pipeline.tasks.mos import calibrate_probability
+from kalshi_temp_pipeline.pipeline.tasks.mos import EmosModel
 from kalshi_temp_pipeline.pipeline.tasks.obs_cli import ObsCliClient
 from kalshi_temp_pipeline.pipeline.tasks.postproc import extract_station_series
 from kalshi_temp_pipeline.pipeline.tasks.time_windows import (
@@ -33,18 +35,24 @@ def smoke_flow() -> str:
     window = get_climate_day_window(date(2026, 7, 10), settings.timezone)
     _ = tmax_over_window(times, temps, window)
 
+    mos = EmosModel(mode="deterministic")
+    mos.fit(pd.DataFrame({"x": [80.0, 82.0, 85.0], "y": [81.0, 83.0, 84.5]}))
+    dist = mos.predict_distribution(pd.DataFrame({"x": [84.0]}))
+    bins = [(-1e9, 82.0), (82.0, 86.0), (86.0, 1e9)]
+    probs = mos.predict_bin_probs(pd.DataFrame({"x": [84.0]}), bins)
+
     orderbook = {"yes_price_cents": 61.0}
-    calibrated = calibrate_probability(0.70)
     _ = make_decision(
-        probability=calibrated.probability,
+        probability=float(probs[0, 1]),
         price_cents=float(orderbook["yes_price_cents"]),
         edge_threshold=0.05,
-        min_hit_rate=0.70,
+        min_hit_rate=0.50,
         current_exposure_usd=0.0,
         order_size_usd=10.0,
         max_exposure_usd=100.0,
     )
 
+    _ = dist
     _ = summarize_verification()
 
     print("OK")  # noqa: T201

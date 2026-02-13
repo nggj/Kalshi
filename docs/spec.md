@@ -91,6 +91,13 @@
 
 ---
 
+## 0) MOS 우선 원칙
+
+- 이 시스템의 실질적 edge는 WRF raw 값이 아니라 **MOS/Calibration의 확률 품질**에 있음.
+- 구현/운영 상세는 `docs/mos.md`를 기준 문서로 참조.
+
+---
+
 ## 5) MOS/Calibration: 점예보가 아니라 확률분포
 
 Kalshi 온도 마켓은 bin(구간) 상품이므로 목표는 `P(Tmax ∈ bin_i)`.
