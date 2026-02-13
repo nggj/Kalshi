@@ -1,0 +1,20 @@
+{
+  "bin_hot": {
+    "yes_bid_cents": 60,
+    "yes_ask_cents": 62,
+    "yes_bid_size": 50,
+    "yes_ask_size": 70
+  },
+  "bin_mild": {
+    "yes_bid_cents": 47,
+    "yes_ask_cents": 52,
+    "yes_bid_size": 4,
+    "yes_ask_size": 6
+  },
+  "bin_cool": {
+    "yes_bid_cents": 30,
+    "yes_ask_cents": 33,
+    "yes_bid_size": 40,
+    "yes_ask_size": 40
+  }
+}
