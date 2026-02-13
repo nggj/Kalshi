@@ -83,7 +83,7 @@ def smoke_flow() -> str:
     )
 
     _ = dist
-    _ = summarize_verification()
+    _ = summarize_verification(probs, realized_bin_index=1)
 
     print("OK")  # noqa: T201
     return "OK"
