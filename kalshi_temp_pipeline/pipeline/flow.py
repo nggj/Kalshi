@@ -13,6 +13,7 @@ from prefect import flow, task
 
 from kalshi_temp_pipeline.config import load_settings
 from kalshi_temp_pipeline.pipeline.tasks.decision import make_decision
+from kalshi_temp_pipeline.pipeline.tasks.market_bins import build_bins_from_markets
 from kalshi_temp_pipeline.pipeline.tasks.mos import EmosModel
 from kalshi_temp_pipeline.pipeline.tasks.obs_cli import ObsCliClient
 from kalshi_temp_pipeline.pipeline.tasks.postproc import extract_station_series
@@ -61,7 +62,15 @@ def task_mos_predict() -> tuple[np.ndarray, object]:
     mos = EmosModel(mode="deterministic")
     mos.fit(pd.DataFrame({"x": [80.0, 82.0, 85.0], "y": [81.0, 83.0, 84.5]}))
     dist = mos.predict_distribution(pd.DataFrame({"x": [84.0]}))
-    bins = [(-1e9, 82.0), (82.0, 86.0), (86.0, 1e9)]
+
+    sample_markets: list[dict[str, object]] = [
+        {"ticker": "T-LOW", "subtitle": "81° or below"},
+        {"ticker": "T-MID", "subtitle": "82° to 86°"},
+        {"ticker": "T-HIGH", "subtitle": "87° or above"},
+    ]
+    bins_by_ticker = build_bins_from_markets(sample_markets)
+    bins = [bins_by_ticker[str(m["ticker"])] for m in sample_markets]
+
     probs = mos.predict_bin_probs(pd.DataFrame({"x": [84.0]}), bins)
     return probs, dist
 
