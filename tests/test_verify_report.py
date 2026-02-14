@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 
 from kalshi_temp_pipeline.pipeline.tasks.baselines import ClimatologyBaseline, PersistenceBaseline
-from kalshi_temp_pipeline.pipeline.tasks.mos import NormalDist
+from kalshi_temp_pipeline.pipeline.tasks.distributions import NormalDist
 from kalshi_temp_pipeline.pipeline.tasks.verify import evaluate_station, generate_station_report
 
 

@@ -35,3 +35,14 @@ MOS의 가치를 보여주려면 같은 station 기준에서 아래를 같이 �
 
 리포트에서는 MAE/RMSE/bias + Brier score를 함께 보며,
 "baseline -> raw model -> MOS" 순으로 개선되는지 확인합니다.
+
+## Quantile MOS (non-normal)
+정규분포 하나로는 왜도(skewness)나 두꺼운 꼬리(heavy tail)를 충분히 표현하기 어렵습니다.
+이를 보완하기 위해 Quantile Regression MOS를 함께 사용할 수 있습니다.
+
+- 아이디어: 여러 분위수(예: 0.05~0.95)를 직접 예측해 분포를 구성
+- 장점: 비대칭 분포를 자연스럽게 표현 가능
+- bin 확률 계산: 분위수 기반 CDF 근사 -> bin 경계 CDF 차이
+
+실무적으로는 EMOS(normal)와 Quantile MOS를 나란히 검증하고,
+신뢰도/샤프니스/수익성 기준에서 더 안정적인 쪽을 채택합니다.

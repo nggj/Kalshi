@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from kalshi_temp_pipeline.pipeline.tasks.baselines import BaselinePredictor
-from kalshi_temp_pipeline.pipeline.tasks.mos import NormalDist
+from kalshi_temp_pipeline.pipeline.tasks.distributions import PredictiveDistribution
 
 
 @dataclass(frozen=True)
@@ -140,7 +140,7 @@ def evaluate_station(
     station: str,
     observed_tmax: float,
     raw_model_tmax: float,
-    mos_dist: NormalDist,
+    mos_dist: PredictiveDistribution,
     mos_bin_probs: np.ndarray,
     bins: list[tuple[float, float]],
     baselines: dict[str, BaselinePredictor],
@@ -155,7 +155,7 @@ def evaluate_station(
         raw_model_tmax, observed_tmax, raw_probs, realized_idx
     )
 
-    mos_mean = float(mos_dist.mu[0])
+    mos_mean = float(mos_dist.mean()[0])
     metrics["mos_mean"] = compute_metrics(mos_mean, observed_tmax, mos_bin_probs[0], realized_idx)
 
     for name, predictor in baselines.items():

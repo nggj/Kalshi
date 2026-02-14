@@ -7,9 +7,10 @@ from typing import cast
 
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
+
+from kalshi_temp_pipeline.pipeline.tasks.distributions import NormalDist
 
 
 @dataclass(frozen=True)
@@ -17,14 +18,6 @@ class MosOutput:
     """Backward-compatible output wrapper used by smoke flow."""
 
     probability: float
-
-
-@dataclass(frozen=True)
-class NormalDist:
-    """Predicted normal distribution parameters."""
-
-    mu: np.ndarray
-    sigma: np.ndarray
 
 
 def _softplus(x: np.ndarray) -> np.ndarray:
@@ -102,14 +95,12 @@ class EmosModel:
         """Predict bin probabilities from normal CDF differences."""
 
         dist = self.predict_distribution(features_df)
-        mu = dist.mu[:, None]
-        sigma = dist.sigma[:, None]
+        lows = np.array([b[0] for b in bins], dtype=float)
+        highs = np.array([b[1] for b in bins], dtype=float)
 
-        lows = np.array([b[0] for b in bins], dtype=float)[None, :]
-        highs = np.array([b[1] for b in bins], dtype=float)[None, :]
-
-        cdf_high = norm.cdf(highs, loc=mu, scale=sigma)
-        cdf_low = norm.cdf(lows, loc=mu, scale=sigma)
+        mean_shape = dist.mean().shape
+        cdf_high = np.column_stack([dist.cdf(np.full(mean_shape, high)) for high in highs])
+        cdf_low = np.column_stack([dist.cdf(np.full(mean_shape, low)) for low in lows])
         probs = np.clip(cdf_high - cdf_low, 0.0, 1.0)
 
         row_sums = probs.sum(axis=1, keepdims=True)
