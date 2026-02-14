@@ -29,6 +29,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", required=True)
     parser.add_argument("--station", required=True)
+    parser.add_argument("--show-hier-bias", action="store_true")
     parser.add_argument(
         "--public-csv",
         default="artifacts/baselines/public_model_station.csv",
@@ -66,7 +67,12 @@ def main() -> None:
         baselines=baselines,
     )
 
-    report_path = generate_station_report(target_date=target_date, station=station, metrics=metrics)
+    report_path = generate_station_report(
+        target_date=target_date,
+        station=station,
+        metrics=metrics,
+        show_hier_bias=args.show_hier_bias,
+    )
     print(report_path)  # noqa: T201
 
 

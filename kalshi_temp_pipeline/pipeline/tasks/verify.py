@@ -172,6 +172,9 @@ def generate_station_report(
     station: str,
     metrics: dict[str, MethodMetrics],
     output_root: Path = Path("artifacts/reports"),
+    show_hier_bias: bool = False,
+    station_bias_estimate: float | None = None,
+    season_bias_estimate: float | None = None,
 ) -> Path:
     """Generate markdown report comparing methods."""
 
@@ -197,6 +200,18 @@ def generate_station_report(
 
     for name, m in metrics.items():
         lines.append(f"| {name} | {m.mae:.3f} | {m.rmse:.3f} | {m.bias:.3f} | {m.brier:.3f} |")
+
+    if show_hier_bias:
+        station_txt = "n/a" if station_bias_estimate is None else f"{station_bias_estimate:.3f}"
+        season_txt = "n/a" if season_bias_estimate is None else f"{season_bias_estimate:.3f}"
+        lines.extend(
+            [
+                "",
+                "## Hierarchical bias correction",
+                f"- station_bias estimate: {station_txt}",
+                f"- season_bias estimate (target date month={target_date.month}): {season_txt}",
+            ]
+        )
 
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return output_path
