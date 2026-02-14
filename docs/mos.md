@@ -26,3 +26,12 @@ Kalshi 온도 마켓은 점예보(`Tmax = 84F`)를 맞추는 문제가 아니라
 
 운영적으로는 “날카롭고(sharp) 동시에 과신하지 않는(calibrated)” 분포를 목표로 해야
 결정 엔진에서 안정적인 양(+)기대값 선별이 가능합니다.
+
+## Station-centric verification과 baseline 비교
+MOS의 가치를 보여주려면 같은 station 기준에서 아래를 같이 비교해야 합니다.
+- persistence / climatology / public-model CSV baseline
+- raw regional model station Tmax
+- MOS calibrated probabilities
+
+리포트에서는 MAE/RMSE/bias + Brier score를 함께 보며,
+"baseline -> raw model -> MOS" 순으로 개선되는지 확인합니다.

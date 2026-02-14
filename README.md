@@ -13,6 +13,22 @@ poetry install
 
 자세한 내용은 `docs/mos.md`를 참고하세요.
 
+## Station-centric evaluation + baseline comparison
+평가는 항상 정산 기준 관측소(station) 중심으로 수행합니다.
+비교 대상:
+- baseline_persistence
+- baseline_climatology
+- baseline_public_csv (옵션, `artifacts/baselines/*.csv`)
+- raw_model_station (WRF station extraction)
+- mos_mean / mos calibrated probs
+
+리포트 생성 예시(DRY_RUN, 무네트워크):
+```bash
+poetry run python -m kalshi_temp_pipeline.report --date 2026-02-13 --station KNYC
+```
+
+출력: `artifacts/reports/{date}/{station}.md`
+
 ## DRY_RUN pipeline smoke test
 Default is `DRY_RUN=true` from `.env.example` and runtime config.
 

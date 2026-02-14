@@ -6,3 +6,4 @@ __pycache__/
 .env
 
 artifacts/obs_cache/
+artifacts/reports/

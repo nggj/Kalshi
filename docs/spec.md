@@ -177,6 +177,7 @@ Kalshi 온도 마켓은 bin(구간) 상품이므로 목표는 `P(Tmax ∈ bin_i)
 
 - 기상: MAE/RMSE, bias, CRPS, reliability
 - 트레이딩: hit rate, EV, max drawdown, 거래당 기대값
+- 검증 리포트는 station 기준으로 baseline(persistence/climatology/public) vs raw WRF vs MOS를 비교
 
 ---
 
