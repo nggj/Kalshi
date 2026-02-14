@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol, cast
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import norm, skewnorm
 
 
 class PredictiveDistribution(Protocol):
@@ -73,3 +73,47 @@ class QuantileDist(PredictiveDistribution):
                 out[i] = float(np.interp(x[i], qv_monotone, self.q_levels))
 
         return out
+
+
+@dataclass(frozen=True)
+class MixtureNormalDist(PredictiveDistribution):
+    """Two-component normal mixture distribution."""
+
+    weights: np.ndarray  # shape (N,2)
+    mus: np.ndarray  # shape (N,2)
+    sigmas: np.ndarray  # shape (N,2)
+
+    def cdf(self, x: np.ndarray) -> np.ndarray:
+        if x.ndim != 1:
+            raise ValueError("x must be 1D")
+        if self.weights.shape != self.mus.shape or self.weights.shape != self.sigmas.shape:
+            raise ValueError("weights, mus, sigmas must have identical shapes")
+        if self.weights.shape[1] != 2:
+            raise ValueError("mixture inputs must have shape (N,2)")
+        if self.weights.shape[0] != x.shape[0]:
+            raise ValueError("x length must match number of samples")
+
+        comp_cdf = norm.cdf(x[:, None], loc=self.mus, scale=self.sigmas)
+        return cast(np.ndarray, np.sum(self.weights * comp_cdf, axis=1))
+
+    def mean(self) -> np.ndarray:
+        if self.weights.shape != self.mus.shape:
+            raise ValueError("weights and mus must have identical shapes")
+        return cast(np.ndarray, np.sum(self.weights * self.mus, axis=1))
+
+
+@dataclass(frozen=True)
+class SkewNormalDist(PredictiveDistribution):
+    """Skew-normal predictive distribution."""
+
+    loc: np.ndarray  # shape (N,)
+    scale: np.ndarray  # shape (N,)
+    shape: np.ndarray  # shape (N,)
+
+    def cdf(self, x: np.ndarray) -> np.ndarray:
+        cdf_vals = skewnorm.cdf(x, a=self.shape, loc=self.loc, scale=self.scale)
+        return cast(np.ndarray, cdf_vals)
+
+    def mean(self) -> np.ndarray:
+        delta = self.shape / np.sqrt(1.0 + self.shape**2)
+        return cast(np.ndarray, self.loc + self.scale * delta * np.sqrt(2.0 / np.pi))
