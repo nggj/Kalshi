@@ -35,6 +35,28 @@ class NormalDist(PredictiveDistribution):
 
 
 @dataclass(frozen=True)
+class TruncatedNormalDist(PredictiveDistribution):
+    """Lower-truncated normal distribution."""
+
+    mu: np.ndarray
+    sigma: np.ndarray
+    lower: np.ndarray
+
+    def cdf(self, x: np.ndarray) -> np.ndarray:
+        base_at_x = norm.cdf(x, loc=self.mu, scale=self.sigma)
+        base_at_lower = norm.cdf(self.lower, loc=self.mu, scale=self.sigma)
+        tail = np.maximum(1.0 - base_at_lower, 1e-12)
+        out = np.where(x < self.lower, 0.0, (base_at_x - base_at_lower) / tail)
+        return np.clip(out, 0.0, 1.0)
+
+    def mean(self) -> np.ndarray:
+        alpha = (self.lower - self.mu) / np.maximum(self.sigma, 1e-12)
+        z = np.maximum(1.0 - norm.cdf(alpha), 1e-12)
+        adj = norm.pdf(alpha) / z
+        return cast(np.ndarray, self.mu + self.sigma * adj)
+
+
+@dataclass(frozen=True)
 class QuantileDist(PredictiveDistribution):
     """Distribution represented by quantile levels and predicted quantile values."""
 
@@ -62,7 +84,6 @@ class QuantileDist(PredictiveDistribution):
         out = np.zeros_like(x, dtype=float)
         for i in range(x.shape[0]):
             qv = np.asarray(self.q_values[i], dtype=float)
-            # enforce monotone quantile curve for stable inversion
             qv_monotone = np.maximum.accumulate(qv)
 
             if x[i] < qv_monotone[0]:
@@ -103,6 +124,34 @@ class MixtureNormalDist(PredictiveDistribution):
 
 
 @dataclass(frozen=True)
+class TruncatedMixtureNormalDist(PredictiveDistribution):
+    """Lower-truncated two-component normal mixture."""
+
+    weights: np.ndarray
+    mus: np.ndarray
+    sigmas: np.ndarray
+    lower: np.ndarray
+
+    def cdf(self, x: np.ndarray) -> np.ndarray:
+        base = MixtureNormalDist(weights=self.weights, mus=self.mus, sigmas=self.sigmas)
+        base_x = base.cdf(x)
+        base_l = base.cdf(self.lower)
+        tail = np.maximum(1.0 - base_l, 1e-12)
+        out = np.where(x < self.lower, 0.0, (base_x - base_l) / tail)
+        return np.clip(out, 0.0, 1.0)
+
+    def mean(self) -> np.ndarray:
+        alpha = (self.lower[:, None] - self.mus) / np.maximum(self.sigmas, 1e-12)
+        surv = np.maximum(1.0 - norm.cdf(alpha), 1e-12)
+        comp_mass = self.weights * surv
+        norm_mass = np.maximum(np.sum(comp_mass, axis=1, keepdims=True), 1e-12)
+        post_w = comp_mass / norm_mass
+
+        comp_mean = self.mus + self.sigmas * (norm.pdf(alpha) / surv)
+        return cast(np.ndarray, np.sum(post_w * comp_mean, axis=1))
+
+
+@dataclass(frozen=True)
 class SkewNormalDist(PredictiveDistribution):
     """Skew-normal predictive distribution."""
 
@@ -117,3 +166,81 @@ class SkewNormalDist(PredictiveDistribution):
     def mean(self) -> np.ndarray:
         delta = self.shape / np.sqrt(1.0 + self.shape**2)
         return cast(np.ndarray, self.loc + self.scale * delta * np.sqrt(2.0 / np.pi))
+
+
+@dataclass(frozen=True)
+class TruncatedSkewNormalDist(PredictiveDistribution):
+    """Lower-truncated skew-normal distribution."""
+
+    loc: np.ndarray
+    scale: np.ndarray
+    shape: np.ndarray
+    lower: np.ndarray
+
+    def cdf(self, x: np.ndarray) -> np.ndarray:
+        base_x = skewnorm.cdf(x, a=self.shape, loc=self.loc, scale=self.scale)
+        base_l = skewnorm.cdf(self.lower, a=self.shape, loc=self.loc, scale=self.scale)
+        tail = np.maximum(1.0 - base_l, 1e-12)
+        out = np.where(x < self.lower, 0.0, (base_x - base_l) / tail)
+        return np.clip(out, 0.0, 1.0)
+
+    def mean(self) -> np.ndarray:
+        out = np.zeros_like(self.loc, dtype=float)
+        for i in range(self.loc.shape[0]):
+            lo = float(self.lower[i])
+            hi = float(self.loc[i] + 12.0 * self.scale[i])
+            if hi <= lo:
+                hi = lo + max(float(self.scale[i]), 1.0)
+            grid = np.linspace(lo, hi, 1000)
+            pdf = skewnorm.pdf(grid, a=self.shape[i], loc=self.loc[i], scale=self.scale[i])
+            mass = float(np.trapezoid(pdf, grid))
+            if mass <= 1e-12:
+                out[i] = lo
+            else:
+                out[i] = float(np.trapezoid(grid * pdf, grid) / mass)
+        return out
+
+
+def condition_on_minimum(dist: PredictiveDistribution, lower: float) -> PredictiveDistribution:
+    """Condition distribution on X >= lower via CDF renormalization."""
+
+    if np.isneginf(lower):
+        return dist
+
+    if isinstance(dist, NormalDist):
+        lower_arr = np.full_like(dist.mu, lower, dtype=float)
+        return TruncatedNormalDist(mu=dist.mu, sigma=dist.sigma, lower=lower_arr)
+
+    if isinstance(dist, QuantileDist):
+        n, q = dist.q_values.shape
+        lower_vec = np.full(n, lower, dtype=float)
+        f_lower = dist.cdf(lower_vec)
+        tail = np.maximum(1.0 - f_lower, 1e-12)
+
+        u = np.clip(f_lower[:, None] + tail[:, None] * dist.q_levels[None, :], 0.0, 1.0)
+        new_q = np.zeros((n, q), dtype=float)
+        for i in range(n):
+            qv = np.maximum.accumulate(dist.q_values[i])
+            new_q[i] = np.interp(u[i], dist.q_levels, qv, left=qv[0], right=qv[-1])
+            new_q[i] = np.maximum(new_q[i], lower)
+        return QuantileDist(q_levels=dist.q_levels, q_values=new_q)
+
+    if isinstance(dist, MixtureNormalDist):
+        lower_arr = np.full(dist.weights.shape[0], lower, dtype=float)
+        return TruncatedMixtureNormalDist(
+            weights=dist.weights,
+            mus=dist.mus,
+            sigmas=dist.sigmas,
+            lower=lower_arr,
+        )
+
+    if isinstance(dist, SkewNormalDist):
+        lower_arr = np.full_like(dist.loc, lower, dtype=float)
+        return TruncatedSkewNormalDist(
+            loc=dist.loc,
+            scale=dist.scale,
+            shape=dist.shape,
+            lower=lower_arr,
+        )
+
+    raise TypeError(f"Unsupported distribution type for truncation: {type(dist)}")

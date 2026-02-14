@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
+from kalshi_temp_pipeline import report as report_module
 from kalshi_temp_pipeline.pipeline.tasks.baselines import ClimatologyBaseline, PersistenceBaseline
 from kalshi_temp_pipeline.pipeline.tasks.distributions import NormalDist
 from kalshi_temp_pipeline.pipeline.tasks.verify import evaluate_station, generate_station_report
@@ -85,3 +86,30 @@ def test_generate_report_includes_hier_bias_section_when_enabled(tmp_path: Path)
     assert "## Hierarchical bias correction" in text
     assert "station_bias estimate: 0.450" in text
     assert "season_bias estimate (target date month=2): -0.200" in text
+
+
+def test_report_cli_adds_nowcast_rows_when_flags_provided(monkeypatch, tmp_path: Path) -> None:
+    out_root = tmp_path / "artifacts" / "reports"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "report.py",
+            "--date",
+            "2026-02-13",
+            "--station",
+            "KNYC",
+            "--as-of",
+            "2026-02-13T15:00:00-05:00",
+            "--max-so-far",
+            "82.5",
+        ],
+    )
+
+    report_module.main()
+    report_path = out_root / "2026-02-13" / "KNYC.md"
+    text = report_path.read_text(encoding="utf-8")
+
+    assert "| mos_mean |" in text
+    assert "| mos_nowcast_trunc_mean |" in text
+    assert "| mos_nowcast_trunc_brier |" in text

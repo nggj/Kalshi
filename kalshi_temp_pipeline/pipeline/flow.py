@@ -15,6 +15,7 @@ from kalshi_temp_pipeline.config import load_settings
 from kalshi_temp_pipeline.pipeline.tasks.decision import make_decision
 from kalshi_temp_pipeline.pipeline.tasks.market_bins import build_bins_from_markets
 from kalshi_temp_pipeline.pipeline.tasks.mos import EmosModel
+from kalshi_temp_pipeline.pipeline.tasks.nowcast import NowcastLinearUpdater, nowcast_bin_probs
 from kalshi_temp_pipeline.pipeline.tasks.obs_cli import ObsCliClient
 from kalshi_temp_pipeline.pipeline.tasks.postproc import extract_station_series
 from kalshi_temp_pipeline.pipeline.tasks.time_windows import (
@@ -58,7 +59,7 @@ def task_compute_tmax(times: list[datetime], temps: list[float], tz: str) -> flo
 
 
 @task
-def task_mos_predict() -> tuple[np.ndarray, object]:
+def task_mos_predict() -> tuple[np.ndarray, np.ndarray, np.ndarray, object]:
     mos = EmosModel(mode="deterministic")
     mos.fit(pd.DataFrame({"x": [80.0, 82.0, 85.0], "y": [81.0, 83.0, 84.5]}))
     dist = mos.predict_distribution(pd.DataFrame({"x": [84.0]}))
@@ -71,8 +72,35 @@ def task_mos_predict() -> tuple[np.ndarray, object]:
     bins_by_ticker = build_bins_from_markets(sample_markets)
     bins = [bins_by_ticker[str(m["ticker"])] for m in sample_markets]
 
-    probs = mos.predict_bin_probs(pd.DataFrame({"x": [84.0]}), bins)
-    return probs, dist
+    base_probs = mos.predict_bin_probs(pd.DataFrame({"x": [84.0]}), bins)
+
+    # Synthetic nowcast scenario (2-6h pre-close style): observed max-so-far conditioning.
+    _as_of = datetime(2026, 7, 10, 15, 0, tzinfo=ZoneInfo("America/New_York"))
+    _max_so_far = 82.7
+    truncation_nowcast_probs = nowcast_bin_probs(dist, bins, max_so_far_value=_max_so_far)
+
+    # Optional lightweight learned nowcast update with synthetic training data.
+    upd = NowcastLinearUpdater(near_cutoff_hours=6.0)
+    fit_df = pd.DataFrame(
+        {
+            "lead_hours": [12.0, 10.0, 8.0, 6.0, 4.0, 2.0],
+            "mu_base": [83.0, 83.1, 83.2, 83.1, 83.0, 82.9],
+            "sigma_base": [1.5, 1.5, 1.5, 1.4, 1.3, 1.2],
+            "temp_obs_now": [80.0, 80.5, 81.0, 81.8, 82.4, 82.8],
+            "temp_fcst_now": [79.8, 80.2, 80.6, 81.0, 81.5, 81.8],
+            "y": [83.2, 83.3, 83.4, 83.5, 83.6, 83.7],
+        }
+    )
+    upd.fit(fit_df)
+    dist_linear = upd.update_distribution(
+        dist,
+        lead_hours=np.array([3.0]),
+        temp_obs_now=np.array([82.8]),
+        temp_fcst_now=np.array([81.8]),
+    )
+    linear_nowcast_probs = nowcast_bin_probs(dist_linear, bins, max_so_far_value=_max_so_far)
+
+    return base_probs, truncation_nowcast_probs, linear_nowcast_probs, dist
 
 
 @task(retries=2, retry_delay_seconds=1)
@@ -126,7 +154,7 @@ def smoke_prefect_flow() -> str:
     _ = task_fetch_obs()
     times, temps = task_extract_station_series(settings.timezone)
     _ = task_compute_tmax(times, temps, settings.timezone)
-    probs, _dist = task_mos_predict()
+    probs, _trunc_probs, _linear_probs, _dist = task_mos_predict()
     orderbook = task_kalshi_read()
     _ = task_decision(probs, orderbook)
     _ = task_verify(probs)
