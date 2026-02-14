@@ -1,0 +1,10 @@
+{
+  "station": "KNYC",
+  "year": 2026,
+  "results": [
+    {"valid": "2026-07-14", "high": 89},
+    {"valid": "2026-07-15", "high": "91"},
+    {"valid": "2026-07-16", "high": null},
+    {"valid": "not-a-date", "high": 77}
+  ]
+}

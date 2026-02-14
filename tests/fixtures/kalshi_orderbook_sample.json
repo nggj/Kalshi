@@ -1,0 +1,7 @@
+{
+  "orderbook": {
+    "ticker": "KXHIGHTEMP-DSM",
+    "yes": [[61, 100]],
+    "no": [[40, 200]]
+  }
+}
